@@ -1,7 +1,8 @@
 name: Build & release
 
-# Push a tag like v0.0.0.1 to build the plugin and publish it as a GitHub release.
-# Pushes to main (and pull requests) only build, so a broken build shows up early.
+# Every push to main builds the plugin. When the <Version> in FateRunner.csproj has no release yet, it also tags
+# that commit v<Version> and publishes the release with latest.zip, so releasing = bump the version and push.
+# (Pushing a v* tag yourself still works too.) Pull requests only build.
 on:
   push:
     branches: [ main ]
@@ -40,9 +41,29 @@ jobs:
           name: FateRunner
           path: bin/Release/FateRunner/latest.zip
 
+      - name: Work out the release
+        id: rel
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = ([xml](Get-Content FateRunner.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $tag = "v$version"
+          if ("${{ github.ref }}".StartsWith("refs/tags/v")) { $tag = "${{ github.ref_name }}" }
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          $exists = $LASTEXITCODE -eq 0
+          $global:LASTEXITCODE = 0
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "publish=$(if ($exists) { 'false' } else { 'true' })" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($exists) { "Release $tag already exists, nothing to publish." } else { "Publishing $tag." }
+
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.rel.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: FateRunner ${{ steps.rel.outputs.tag }}
           files: bin/Release/FateRunner/latest.zip
           generate_release_notes: true

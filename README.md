@@ -89,9 +89,9 @@ DropBuddy uses `StartForGemstones` when a Make needs more Bicolor Gemstones than
 ## Releasing a new version
 
 1. Set `<Version>` in `FateRunner.csproj` and `AssemblyVersion` in `repo.json` to the new number.
-2. Commit, then tag it: `git tag v0.0.0.2 && git push origin main --tags`.
-3. GitHub Actions builds the plugin and attaches `latest.zip` to a release for that tag. Dalamud picks the update up
-   from `repo.json`.
+2. Commit and push to `main`.
+3. GitHub Actions builds the plugin; since that version has no release yet, it tags the commit `v<version>` and
+   publishes the release with `latest.zip`. Dalamud picks the update up from `repo.json`.
 
 FateRunner's code is its own. Auto FATE Grind and Autofate were only read for reference on how the game behaves; no
 code from them is used.
