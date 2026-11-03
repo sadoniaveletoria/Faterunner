@@ -17,7 +17,9 @@ public sealed class MainWindow : Window
     public MainWindow(Plugin plugin) : base("FateRunner###FateRunnerMain")
     {
         p = plugin;
-        version = "v" + (typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "?");
+        // Four parts when the last one is used (0.0.0.1), otherwise three (1.2.0).
+        var v = typeof(Plugin).Assembly.GetName().Version;
+        version = v == null ? "v?" : "v" + v.ToString(v.Revision > 0 ? 4 : 3);
         SizeConstraints = new WindowSizeConstraints { MinimumSize = new Vector2(480, 520), MaximumSize = new Vector2(900, 1400) };
         Size = new Vector2(540, 760);
         SizeCondition = ImGuiCond.FirstUseEver;
