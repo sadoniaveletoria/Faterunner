@@ -313,7 +313,7 @@ public sealed class MainWindow : Window
             var rowStart = ImGui.GetCursorPosX();
             Ui.ExpansionHeader(expansion, leveling
                 ? $"Lv{zones.Min(z => z.MinLevel)}–{zones.Max(z => z.MaxLevel)}"
-                : $"{zones.Count(z => (auto ? picks : c.Zones).Contains(z.Territory))} / {zones.Length}");
+                : $"{zones.Count(z => auto ? picks.Contains(z.Territory) : c.Zones.Contains(z.Territory))} / {zones.Length}");
             if (!auto)
             {
                 var bw = Ui.MiniButtonWidth("All") + Ui.MiniButtonWidth("None") + 5;
