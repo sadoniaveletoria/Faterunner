@@ -68,7 +68,7 @@ and off again when FateRunner stops. Optional; toggle under Travel & combat.
 | `FateRunner.Start` | `() → bool` | with the goal set in its window |
 | `FateRunner.Stop` | `() → void` | |
 
-DropBuddy uses `StartForGemstones` when a Make needs more Bicolor Gemstones than you have.
+CraftBuddy uses `StartForGemstones` when a Make needs more Bicolor Gemstones than you have.
 
 ## Requirements
 

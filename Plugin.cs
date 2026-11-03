@@ -37,7 +37,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly WindowSystem windows = new("FateRunner");
     private readonly MainWindow mainWindow;
 
-    // IPC for other plugins (DropBuddy asks for gemstones this way).
+    // IPC for other plugins (CraftBuddy asks for gemstones this way).
     private readonly ICallGateProvider<bool> ipcIsRunning;
     private readonly ICallGateProvider<string> ipcStatus;
     private readonly ICallGateProvider<int> ipcGemstones;
