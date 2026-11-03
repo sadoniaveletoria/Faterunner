@@ -67,3 +67,20 @@ jobs:
           name: FateRunner ${{ steps.rel.outputs.tag }}
           files: bin/Release/FateRunner/latest.zip
           generate_release_notes: true
+
+      - name: Refresh the combined plugin list
+        if: steps.rel.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          LIST_TOKEN: ${{ secrets.PLUGIN_LIST_TOKEN }}
+        run: |
+          # Tells sadoniaveletoria/DalamudPlugins to rebuild pluginmaster.json now, so this release shows up in
+          # Dalamud within minutes. Never fails the release: without the secret (or if GitHub says no) the list still
+          # picks the release up on its 10-minute schedule.
+          if (-not $env:LIST_TOKEN) { "No PLUGIN_LIST_TOKEN secret — skipping; the list refreshes every 10 minutes anyway."; exit 0 }
+          $headers = @{ Authorization = "Bearer $env:LIST_TOKEN"; Accept = "application/vnd.github+json"; "X-GitHub-Api-Version" = "2022-11-28" }
+          try {
+            Invoke-RestMethod -Method Post -Headers $headers -ContentType "application/json" -Body '{"ref":"main"}' `
+              -Uri "https://api.github.com/repos/sadoniaveletoria/DalamudPlugins/actions/workflows/update.yml/dispatches"
+            "Asked DalamudPlugins to rebuild the plugin list."
+          } catch { "::warning::Couldn't trigger the plugin list update: $($_.Exception.Message)" }
