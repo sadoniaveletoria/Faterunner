@@ -105,14 +105,30 @@ public static unsafe class Game
         return true;
     }
 
+    private static DateTime lastTalkClick = DateTime.MinValue;
+
     /// <summary>Advances an NPC speech bubble (Talk addon), if one is up.</summary>
     public static bool ClickTalk()
     {
         var a = Addon("Talk");
-        if (a == null || !a->IsReady) return false;
-        var evt = stackalloc AtkEvent[1];
-        var data = stackalloc AtkEventData[1];
-        a->ReceiveEvent(AtkEventType.MouseClick, 0, evt, data);
+        if (a == null || !a->IsReady || !a->IsVisible) return false;
+        var stage = AtkStage.Instance();
+        if (stage == null) return false;
+        // One click per bubble: give the game a moment to show the next line.
+        if ((DateTime.UtcNow - lastTalkClick).TotalMilliseconds < 400) return true;
+        lastTalkClick = DateTime.UtcNow;
+
+        // The game reads the event's listener and target, so both must be real — an empty/uninitialised event
+        // crashes it. Zero both structs, point the event at the Talk window and the stage, and send the same
+        // down → click → up a real mouse click makes.
+        AtkEvent evt = default;
+        evt.Listener = (AtkEventListener*)a;
+        evt.Target = &stage->AtkEventTarget;
+        evt.State.StateFlags = (AtkEventStateFlags)132;
+        AtkEventData data = default;
+        a->ReceiveEvent(AtkEventType.MouseDown, 0, &evt, &data);
+        a->ReceiveEvent(AtkEventType.MouseClick, 0, &evt, &data);
+        a->ReceiveEvent(AtkEventType.MouseUp, 0, &evt, &data);
         return true;
     }
 }
