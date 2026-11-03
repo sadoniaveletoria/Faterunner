@@ -120,6 +120,16 @@ public static unsafe class FateZones
     }
 
     /// <summary>
+    /// Gemstones, picked for you: every Shadowbringers / Endwalker / Dawntrail zone your job's level allows and you can
+    /// teleport to, highest-level first. (A run starts in the zone you're already in when it's one of them.) The
+    /// order is fixed so zone hopping goes round them instead of back and forth.
+    /// </summary>
+    public static List<uint> ForGemstones(int level)
+        => Zones.Where(z => z.Gemstones && z.MinLevel <= level && Attuned(z.Territory))
+                .OrderByDescending(z => z.MinLevel)
+                .Select(z => z.Territory).ToList();
+
+    /// <summary>
     /// Leveling: the zones worth farming at this level, best first — ones whose FATE range covers your level, the
     /// higher-level ones first (more experience), then the nearest-below as a fallback. Only zones you can teleport to.
     /// </summary>

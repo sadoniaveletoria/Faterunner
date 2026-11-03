@@ -14,8 +14,10 @@ You also need **vnavmesh** and **Wrath Combo** (and optionally Lifestream and Bo
 
 ## What it does
 
-1. **Gets to a FATE zone.** It uses the zones you ticked: Shadowbringers, Endwalker and Dawntrail, whose FATEs pay
-   Bicolor Gemstones. Zones above your job's level are skipped. It teleports to the zone's aetheryte, through
+1. **Gets to a FATE zone.** For gemstones it picks the zones itself by default: every Shadowbringers, Endwalker and
+   Dawntrail zone (their FATEs pay Bicolor Gemstones) your job's level allows and you've attuned to, starting where you
+   are, highest level first. Turn off "Pick gemstone zones for me" under Zones to choose them yourself. Runs CraftBuddy
+   starts always pick their own. It teleports to the zone's aetheryte, through
    Lifestream if loaded, otherwise the game's own teleport.
 2. **Picks the best FATE.** The order is:
    - the one you're standing in;
@@ -64,9 +66,10 @@ and off again when FateRunner stops. Optional; toggle under Travel & combat.
 | `FateRunner.IsRunning` | `() → bool` | |
 | `FateRunner.Status` | `() → string` | what it's doing |
 | `FateRunner.Gemstones` | `() → int` | Bicolor Gemstones held |
-| `FateRunner.StartForGemstones` | `(int target) → bool` | run until you hold `target` gemstones; false if it can't start (it says why in chat) |
+| `FateRunner.StartForGemstones` | `(int target) → bool` | run until you hold `target` gemstones, in zones it picks itself; false if it can't start (see `LastStartError`) |
 | `FateRunner.Start` | `() → bool` | with the goal set in its window |
 | `FateRunner.Stop` | `() → void` | |
+| `FateRunner.LastStartError` | `() → string` | why the last start was refused ("" if it started) |
 
 CraftBuddy uses `StartForGemstones` when a Make needs more Bicolor Gemstones than you have.
 

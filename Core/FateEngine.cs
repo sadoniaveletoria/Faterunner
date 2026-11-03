@@ -48,6 +48,10 @@ public sealed unsafe class FateEngine : IDisposable
     public int LevelAtStart { get; private set; }
     public DateTime StartedAt { get; private set; }
     public uint TargetZone { get; private set; }
+    /// <summary>Why the last Start was refused ("" when it started).</summary>
+    public string LastStartError { get; private set; } = "";
+    /// <summary>This run picks its own gemstone zones (always for other plugins; otherwise the "pick for me" setting).</summary>
+    public bool AutoZones { get; private set; }
 
     private DateTime phaseSince, nextTick, emptySince = DateTime.MinValue, lastSync, lastInteract, lastAutoAttack, diedAt;
     private readonly Dictionary<ushort, DateTime> blacklist = new();      // FATEs to leave alone for a while
@@ -76,12 +80,24 @@ public sealed unsafe class FateEngine : IDisposable
     /// <summary>Starts a run. Returns why it can't, or null.</summary>
     public string? Start(RunGoal goal, int target, string? requester)
     {
+        var why = TryStart(goal, target, requester);
+        LastStartError = why ?? "";
+        return why;
+    }
+
+    private string? TryStart(RunGoal goal, int target, string? requester)
+    {
+        if (!Running) AutoZones = goal != RunGoal.Leveling && (requester != null || cfg.AutoPickGemZones);
         if (Running) return "already running.";
         if (Plugin.ObjectTable.LocalPlayer == null) return "not logged in.";
         if (!nav.IsAvailable) return "vnavmesh isn't loaded — it's needed to move around.";
         if (cfg.UseWrath && !wrath.IsAvailable) return "Wrath Combo isn't loaded — it does the fighting (or untick \"Use Wrath Combo\").";
         if (goal == RunGoal.Leveling ? FateZones.ForLevel(Game.JobLevel).Count == 0 : false)
             return $"no zone with FATEs for Lv{Game.JobLevel} that you've attuned to an aetheryte in.";
+        if (goal != RunGoal.Leveling && AutoZones && GemZones().Count == 0)
+            return Game.JobLevel < 70
+                ? $"your job is Lv{Game.JobLevel} — gemstone FATEs start at Lv70 (Shadowbringers). Switch to a Lv70+ combat job."
+                : "you haven't attuned to an aetheryte in any Shadowbringers, Endwalker or Dawntrail zone your level allows.";
         if (goal != RunGoal.Leveling && GemZones().Count == 0)
         {
             var level = Game.JobLevel;
@@ -231,6 +247,7 @@ public sealed unsafe class FateEngine : IDisposable
     private List<uint> GemZones()
     {
         var level = Game.JobLevel;
+        if (AutoZones) return FateZones.ForGemstones(level);
         return FateZones.All.Where(z => cfg.Zones.Contains(z) && FateZones.Attuned(z) && level >= FateZones.MinLevel(z)).ToList();
     }
 

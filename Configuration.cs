@@ -45,6 +45,8 @@ public sealed class Configuration : IPluginConfiguration
     // ---- Zones ----
     /// <summary>Territory ids FateRunner may farm (and hop between).</summary>
     public HashSet<uint> Zones { get; set; } = new(Data.FateZones.All);
+    /// <summary>Gemstone runs: pick the zones automatically (every gemstone zone your level and aetherytes allow).</summary>
+    public bool AutoPickGemZones { get; set; } = true;
     public bool HopZones { get; set; } = true;
     /// <summary>Seconds to wait in a zone with no FATEs before hopping to the next one.</summary>
     public int EmptyZoneWaitSeconds { get; set; } = 45;

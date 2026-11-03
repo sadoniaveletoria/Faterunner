@@ -44,6 +44,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ICallGateProvider<int, bool> ipcStartForGemstones;
     private readonly ICallGateProvider<bool> ipcStart;
     private readonly ICallGateProvider<object> ipcStop;
+    private readonly ICallGateProvider<string> ipcLastStartError;
 
     public Plugin()
     {
@@ -75,6 +76,8 @@ public sealed class Plugin : IDalamudPlugin
         ipcStart.RegisterFunc(() => Engine.Start(Config.Goal, Config.Goal == RunGoal.Leveling ? Config.LevelTarget : Config.GemstoneTarget, null) == null);
         ipcStop = PluginInterface.GetIpcProvider<object>("FateRunner.Stop");
         ipcStop.RegisterAction(() => Engine.Stop("Stopped by another plugin"));
+        ipcLastStartError = PluginInterface.GetIpcProvider<string>("FateRunner.LastStartError");
+        ipcLastStartError.RegisterFunc(() => Engine.LastStartError);
     }
 
     private void OnCommand(string command, string args)
@@ -101,6 +104,7 @@ public sealed class Plugin : IDalamudPlugin
         ipcStartForGemstones.UnregisterFunc();
         ipcStart.UnregisterFunc();
         ipcStop.UnregisterAction();
+        ipcLastStartError.UnregisterFunc();
         Engine.Dispose();
         Commands.RemoveHandler(Command);
         Commands.RemoveHandler(ShortCommand);

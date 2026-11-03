@@ -66,7 +66,8 @@ public sealed class MainWindow : Window
         // ---- Tabs ----
         var overview = e.Running || Plugin.ObjectTable.LocalPlayer != null ? e.Overview() : new List<FateEngine.FateRow>();
         var leveling = c.Goal == RunGoal.Leveling;
-        var zoneCount = leveling ? FateZones.ForLevel(Game.JobLevel).Count : c.Zones.Count;
+        var zoneCount = leveling ? FateZones.ForLevel(Game.JobLevel).Count
+                      : (e.Running ? e.AutoZones : c.AutoPickGemZones) ? FateZones.ForGemstones(Game.JobLevel).Count : c.Zones.Count;
         Ui.TabStrip("##tabs", new[]
         {
             ("FATEs here", overview.Count(r => !r.Skipped).ToString()),
@@ -273,13 +274,29 @@ public sealed class MainWindow : Window
         var level = Game.JobLevel;
         var here = (uint)Plugin.ClientState.TerritoryType;
         var leveling = c.Goal == RunGoal.Leveling;
-        var picks = leveling ? FateZones.ForLevel(level) : new List<uint>();
         ImGui.Dummy(new Vector2(0, 2));
+        if (!leveling)
+        {
+            var ap = c.AutoPickGemZones;
+            if (Ui.Toggle("Pick gemstone zones for me", ref ap,
+                          "Farms every Shadowbringers, Endwalker and Dawntrail zone your job's level allows and you've attuned to, " +
+                          "starting where you are, highest level first. Runs started by CraftBuddy always do this."))
+            { c.AutoPickGemZones = ap; changed = true; }
+        }
+        // While a run is going, show the zones it's really using (a CraftBuddy run always picks its own).
+        var autoGems = !leveling && (e.Running ? e.AutoZones : c.AutoPickGemZones);
+        var auto = leveling || autoGems; // tiles show FateRunner's picks, read-only
+        var picks = leveling ? FateZones.ForLevel(level) : autoGems ? FateZones.ForGemstones(level) : new List<uint>();
         ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
         if (leveling)
             ImGui.TextColored(Ui.Muted, picks.Count > 0
                 ? $"Leveling at Lv{level}: {FateZones.Name(picks[0])} first" + (picks.Count > 1 ? $", then {string.Join(", ", picks.Skip(1).Take(3).Select(FateZones.Name))}" : "") + ". It moves up as you level."
                 : $"No attuned zone with FATEs for Lv{level}. Attune to that zone's aetheryte first.");
+        else if (autoGems)
+            ImGui.TextColored(Ui.Muted, picks.Count > 0
+                ? $"Lv{level}: farms {picks.Count} zone{(picks.Count == 1 ? "" : "s")}, {FateZones.Name(picks[0])} first."
+                : level < 70 ? $"Your job is Lv{level} — gemstone FATEs start at Lv70 (Shadowbringers)."
+                             : "No gemstone zone attuned yet — attune to an aetheryte in a Shadowbringers, Endwalker or Dawntrail zone.");
         else
             ImGui.TextColored(Ui.Muted, "Click zones to farm. Only Shadowbringers onward pays Bicolor Gemstones.");
         ImGui.PopTextWrapPos();
@@ -296,8 +313,8 @@ public sealed class MainWindow : Window
             var rowStart = ImGui.GetCursorPosX();
             Ui.ExpansionHeader(expansion, leveling
                 ? $"Lv{zones.Min(z => z.MinLevel)}–{zones.Max(z => z.MaxLevel)}"
-                : $"{zones.Count(z => c.Zones.Contains(z.Territory))} / {zones.Length}");
-            if (!leveling)
+                : $"{zones.Count(z => (auto ? picks : c.Zones).Contains(z.Territory))} / {zones.Length}");
+            if (!auto)
             {
                 var bw = Ui.MiniButtonWidth("All") + Ui.MiniButtonWidth("None") + 5;
                 ImGui.SameLine();
@@ -316,10 +333,10 @@ public sealed class MainWindow : Window
                 var attuned = FateZones.Attuned(z.Territory);
                 var tooLow = level < z.MinLevel;
                 var note = !attuned ? "not attuned" : tooLow ? $"needs Lv{z.MinLevel}" : null;
-                var selected = leveling ? picks.Contains(z.Territory) : c.Zones.Contains(z.Territory);
+                var selected = auto ? picks.Contains(z.Territory) : c.Zones.Contains(z.Territory);
                 var active = e.Running && e.TargetZone == z.Territory;
                 if (Ui.ZoneTile($"##zone{z.Territory}", FateZones.Name(z.Territory), $"Lv{z.MinLevel}–{z.MaxLevel}", note, color,
-                                selected, attuned && !tooLow, here == z.Territory, active, tileW) && !leveling)
+                                selected, attuned && !tooLow, here == z.Territory, active, tileW) && !auto)
                 {
                     if (!c.Zones.Remove(z.Territory)) c.Zones.Add(z.Territory);
                     changed = true;
