@@ -53,7 +53,7 @@ public sealed unsafe class FateEngine : IDisposable
     /// <summary>This run picks its own gemstone zones (always for other plugins; otherwise the "pick for me" setting).</summary>
     public bool AutoZones { get; private set; }
 
-    private DateTime phaseSince, nextTick, emptySince = DateTime.MinValue, lastSync, lastInteract, lastAutoAttack, diedAt;
+    private DateTime phaseSince, nextTick, emptySince = DateTime.MinValue, lastSync, lastInteract, diedAt;
     private readonly Dictionary<ushort, DateTime> blacklist = new();      // FATEs to leave alone for a while
     private readonly HashSet<uint> badZones = new();                      // zones we couldn't get to this run
     private int teleportTries, npcTries, handInStage;
@@ -489,7 +489,8 @@ public sealed unsafe class FateEngine : IDisposable
         }
         // Level sync before fighting: over-level and un-synced, a FATE gives no reward. Step into the ring (the game
         // only lets you sync from inside it) and sync, retrying until the game confirms.
-        if (Game.JobLevel > f.MaxLevel && !Fates.SyncedTo(f.Id))
+        // Synced = the level the game shows you is the FATE's level (more reliable than the FATE manager's id).
+        if (Game.JobLevel > f.MaxLevel && me.Level > f.MaxLevel)
         {
             if (syncStartedAt == DateTime.MinValue) syncStartedAt = DateTime.UtcNow;
             if (Fates.CurrentId != f.Id)
@@ -498,7 +499,8 @@ public sealed unsafe class FateEngine : IDisposable
                 Status = $"{f.Name} — stepping into the ring to level sync";
                 return;
             }
-            if (DateTime.UtcNow - lastSync > TimeSpan.FromSeconds(1))
+            // Level Sync is a toggle: press it, then give the game a few seconds to apply it before pressing again.
+            if (DateTime.UtcNow - lastSync > TimeSpan.FromSeconds(3))
             {
                 lastSync = DateTime.UtcNow;
                 Fates.SyncTo(f.Id);
@@ -652,12 +654,8 @@ public sealed unsafe class FateEngine : IDisposable
         if (nav.IsBusy) nav.Stop();
         if (cfg.UseWrath) wrath.SetAutoRotation(true);
         fighting = true;
-        // The rotation won't open a fight on its own: auto-attack it once to pull.
-        if (!Plugin.Condition[ConditionFlag.InCombat] && DateTime.UtcNow - lastAutoAttack > TimeSpan.FromSeconds(2))
-        {
-            lastAutoAttack = DateTime.UtcNow;
-            ActionManager.Instance()->UseAction(ActionType.Action, 7, mob.GameObjectId);
-        }
+        // The rotation won't open a fight on its own: open it with the job's basic attack (or auto-attack).
+        if (!Plugin.Condition[ConditionFlag.InCombat]) Pull.Open(me, mob, () => { if (nav.IsBusy) nav.Stop(); });
     }
 
     private void StopFighting()
