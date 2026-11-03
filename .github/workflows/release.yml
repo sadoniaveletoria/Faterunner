@@ -1,0 +1,48 @@
+name: Build & release
+
+# Push a tag like v0.0.0.1 to build the plugin and publish it as a GitHub release.
+# Pushes to main (and pull requests) only build, so a broken build shows up early.
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Download Dalamud
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
+          $dest = "$env:AppData\XIVLauncher\addon\Hooks\dev"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Expand-Archive -Force latest.zip $dest
+          "DALAMUD_HOME=$dest\" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build
+        run: dotnet build FateRunner.csproj -c Release
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: FateRunner
+          path: bin/Release/FateRunner/latest.zip
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/Release/FateRunner/latest.zip
+          generate_release_notes: true

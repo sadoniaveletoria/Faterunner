@@ -1,0 +1,15 @@
+{
+  "Author": "Sadonia",
+  "Name": "FateRunner",
+  "InternalName": "FateRunner",
+  "Punchline": "Automated FATE farming for Bicolor Gemstones or leveling.",
+  "Description": "FateRunner finds FATEs, flies to them with vnavmesh, level syncs, and fights with Wrath Combo's Auto-Rotation (with BossMod AI dodging if you have it). It handles kill, boss, defend, hand-in and escort FATEs, keeps your chocobo out, and hops zones when yours runs dry.\n\nGoals: a Bicolor Gemstone target (stopping before the 1,500 cap), run until stopped, or leveling, which picks zones for your job's level and moves up as you level.\n\nRequires: vnavmesh, Wrath Combo. Optional: Lifestream, BossMod Reborn or BossMod.",
+  "Tags": [
+    "fate",
+    "gemstones",
+    "leveling",
+    "automation"
+  ],
+  "RepoUrl": "https://github.com/sadoniaveletoria/Faterunner",
+  "ApplicableVersion": "any"
+}
