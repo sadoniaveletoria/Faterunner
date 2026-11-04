@@ -49,9 +49,9 @@ back.
 
 - **Gemstones: stop at a goal** — farm the zones you picked until you hold N Bicolor Gemstones.
 - **Gemstones: run until stopped** — same, without a goal (still stops before the 1,500 cap if you want).
-- **Leveling: up to a level** — FateRunner picks the zone whose FATEs fit your job's real level (any expansion,
-  A Realm Reborn to Dawntrail, only zones you've attuned to), and moves up to the next zone as you level, until the
-  level you set. The zone tiles show which zones it will use.
+- **Leveling: up to a level** — FateRunner picks the zones with the most FATEs you can do at your job's real level
+  (read from the game's own FATE list; any expansion, only zones you've attuned to), and moves up as you level, until
+  the level you set. The zone tiles show which zones it will use.
 
 **Level sync** is always on: inside the ring it syncs before attacking, retrying until the game confirms (an
 over-level, un-synced player gets nothing from a FATE).

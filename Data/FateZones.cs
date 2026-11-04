@@ -129,15 +129,65 @@ public static unsafe class FateZones
                 .OrderByDescending(z => z.MinLevel)
                 .Select(z => z.Territory).ToList();
 
+    private static Dictionary<uint, List<int>>? fateLevels;
+
     /// <summary>
-    /// Leveling: the zones worth farming at this level, best first — ones whose FATE range covers your level, the
-    /// higher-level ones first (more experience), then the nearest-below as a fallback. Only zones you can teleport to.
+    /// Every regular FATE's level per zone, from the game's own FATE table (FATE → its map location → the zone). Built
+    /// once. Used to pick leveling zones by the FATEs actually there instead of a rough level range.
+    /// </summary>
+    public static Dictionary<uint, List<int>> FateLevels
+    {
+        get
+        {
+            if (fateLevels != null) return fateLevels;
+            var map = new Dictionary<uint, List<int>>();
+            try
+            {
+                var known = Zones.Select(z => z.Territory).ToHashSet();
+                var levels = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Level>();
+                foreach (var f in Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Fate>())
+                {
+                    if (f.ClassJobLevel == 0 || f.EurekaFate != 0 || f.Location == 0) continue;
+                    if (!levels.TryGetRow(f.Location, out var loc)) continue;
+                    var territory = loc.Territory.RowId;
+                    if (!known.Contains(territory)) continue;
+                    if (!map.TryGetValue(territory, out var list)) map[territory] = list = new List<int>();
+                    list.Add(f.ClassJobLevel);
+                }
+            }
+            catch (System.Exception ex) { Plugin.Log.Warning(ex, "Couldn't read FATE levels from the game data"); }
+            return fateLevels = map;
+        }
+    }
+
+    /// <summary>How many of a zone's FATEs suit this level (FateRunner does FATEs up to 3 levels above you).</summary>
+    private static double Fit(uint territory, int level)
+    {
+        if (!FateLevels.TryGetValue(territory, out var list)) return 0;
+        // Full weight at or just around your level, half for a little below (less experience), none above +3
+        // (those get skipped) or far below.
+        return list.Sum(l => l > level + 3 ? 0 : l >= level - 3 ? 1.0 : l >= level - 7 ? 0.5 : 0);
+    }
+
+    /// <summary>
+    /// Leveling: the zones worth farming at this level, best first — the ones with the most FATEs you can do at about
+    /// your level (from the game's FATE table), then the nearest-below as a fallback. Only zones you can teleport to.
     /// </summary>
     public static List<uint> ForLevel(int level)
     {
-        var usable = Zones.Where(z => z.MinLevel <= level && Attuned(z.Territory)).ToList();
-        var fitting = usable.Where(z => level <= z.MaxLevel + 2).OrderByDescending(z => z.MinLevel).ToList();
-        if (fitting.Count == 0) fitting = usable.OrderByDescending(z => z.MaxLevel).Take(2).ToList();
+        var usable = Zones.Where(z => z.MinLevel <= level + 3 && Attuned(z.Territory)).ToList();
+        if (FateLevels.Count > 0)
+        {
+            var scored = usable.Select(z => (z, fit: Fit(z.Territory, level)))
+                               .Where(x => x.fit >= 2)                      // at least a couple of FATEs worth doing
+                               .OrderByDescending(x => x.fit)
+                               .ThenByDescending(x => x.z.MinLevel)
+                               .Select(x => x.z.Territory).ToList();
+            if (scored.Count > 0) return scored;
+        }
+        // No game data (or nothing fits well): zones whose range covers your level, then the nearest below.
+        var fitting = usable.Where(z => z.MinLevel <= level && level <= z.MaxLevel + 2).OrderByDescending(z => z.MinLevel).ToList();
+        if (fitting.Count == 0) fitting = usable.Where(z => z.MinLevel <= level).OrderByDescending(z => z.MaxLevel).Take(2).ToList();
         return fitting.Select(z => z.Territory).ToList();
     }
 }
