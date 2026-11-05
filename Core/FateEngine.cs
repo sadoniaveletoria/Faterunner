@@ -615,16 +615,21 @@ public sealed unsafe class FateEngine : IDisposable
             handInMob = 0;
         }
 
-        // 2) Fetching an item: until it's picked up (it disappears) or it's clearly not working.
+        // 2) Fetching an item: until it's picked up (it disappears) or it's clearly not working. Never while in
+        //    combat — fighting comes first (and an item walk switches the rotation off).
         if (handInItem != 0)
         {
             var item = ByObjectId(handInItem);
-            var attacked = AttackerOf(me, f.Id);
             if (item == null || !item.IsTargetable) handInItem = 0; // picked up (or someone else got it)
-            else if (attacked != null) { handInItem = 0; StartHandInFight(attacked); return; } // deal with it first
-            else if (now - handInSince > TimeSpan.FromSeconds(15) || handInTries >= 5)
+            else if (inCombat)
             {
-                skippedItems[handInItem] = now.AddMinutes(1); // can't reach / pick it up — leave it for a minute
+                handInItem = 0;
+                if ((AttackerOf(me, f.Id) ?? PickEnemy(me, f.Id, f.Position, f.Radius + 8f)) is { } foe) { StartHandInFight(foe); return; }
+            }
+            else if (now - handInSince > TimeSpan.FromSeconds(10) || handInTries >= 3)
+            {
+                // Not picking up (out of reach, or a FATE object that only looks like a pickup): leave it a while.
+                skippedItems[handInItem] = now.AddMinutes(5);
                 handInItem = 0;
             }
             else
@@ -643,7 +648,7 @@ public sealed unsafe class FateEngine : IDisposable
         // 3) Choose the next thing: whatever is attacking you, else an item on the ground, else a FATE mob.
         if (AttackerOf(me, f.Id) is { } attacker) { StartHandInFight(attacker); return; }
         foreach (var k in skippedItems.Where(kv => kv.Value < now).Select(kv => kv.Key).ToList()) skippedItems.Remove(k);
-        if (FatePickup(me, f.Id) is { } next)
+        if (!inCombat && FatePickup(me, f.Id) is { } next)
         {
             handInItem = next.GameObjectId;
             handInSince = now;
@@ -843,7 +848,7 @@ public sealed unsafe class FateEngine : IDisposable
     private static int PlayersNear(FateInfo f)
     {
         var me = Plugin.ObjectTable.LocalPlayer;
-        return Plugin.ObjectTable.Count(o => o.ObjectKind == ObjectKind.Player && o.GameObjectId != me?.GameObjectId &&
+        return Plugin.ObjectTable.Count(o => o.ObjectKind == ObjectKind.Pc && o.GameObjectId != me?.GameObjectId &&
                                              Vector3.Distance(o.Position, f.Position) <= f.Radius + 15f);
     }
 
