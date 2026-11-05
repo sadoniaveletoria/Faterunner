@@ -53,6 +53,11 @@ back.
   (read from the game's own FATE list; any expansion, only zones you've attuned to), and moves up as you level, until
   the level you set. The zone tiles show which zones it will use.
 
+**Group bosses** (Which FATEs → Group bosses, on by default): once synced in a boss FATE's ring, a boss with far more
+HP than you (default 60×) counts as a group boss. FateRunner leaves and remembers the FATE by name, so it's skipped from
+then on without flying there; click a name in that list to do it again. Optionally it joins anyway when enough other
+players (default 8) are already fighting it.
+
 **Level sync** is always on: inside the ring it syncs before attacking, retrying until the game confirms (an
 over-level, un-synced player gets nothing from a FATE).
 

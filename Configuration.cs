@@ -42,6 +42,17 @@ public sealed class Configuration : IPluginConfiguration
     public int SkipAboveProgress { get; set; } = 90;
     public bool PreferBonus { get; set; } = true;
 
+    // ---- Group bosses ----
+    /// <summary>Leave boss FATEs whose boss is too big to solo (judged by its HP once synced in the ring).</summary>
+    public bool SkipGroupBosses { get; set; } = true;
+    /// <summary>A boss with more than this many times your (synced) HP counts as a group boss.</summary>
+    public int GroupBossHpRatio { get; set; } = 60;
+    /// <summary>…unless at least <see cref="GroupBossPlayers"/> other players are already there.</summary>
+    public bool JoinGroupBossWithPlayers { get; set; } = true;
+    public int GroupBossPlayers { get; set; } = 8;
+    /// <summary>Boss FATEs found to be group bosses (by name), so they're skipped without flying there again.</summary>
+    public HashSet<string> GroupBosses { get; set; } = new();
+
     // ---- Zones ----
     /// <summary>Territory ids FateRunner may farm (and hop between).</summary>
     public HashSet<uint> Zones { get; set; } = new(Data.FateZones.All);

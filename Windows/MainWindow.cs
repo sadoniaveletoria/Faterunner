@@ -394,7 +394,65 @@ public sealed class MainWindow : Window
         Ui.EndPanel();
 
         ImGui.Dummy(new Vector2(0, 4));
+        changed |= DrawGroupBosses(c);
+
+        ImGui.Dummy(new Vector2(0, 4));
         Ui.Note("Level sync is always on: it syncs inside the ring before attacking (un-synced, a FATE pays nothing).", Ui.Good);
+        return changed;
+    }
+
+    private string? forgetBoss;
+
+    private bool DrawGroupBosses(Configuration c)
+    {
+        var changed = false;
+        Ui.BeginPanel();
+        Ui.CardTitle("Group bosses");
+        changed |= Flag("Skip bosses that need a group", c.SkipGroupBosses, v => c.SkipGroupBosses = v,
+                        "Big notorious monsters you can't solo. Once synced in the ring, a boss with far more HP than you counts as one: " +
+                        "FateRunner leaves, and remembers it so it never flies there again.");
+        if (c.SkipGroupBosses)
+        {
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextColored(Ui.Muted, "A group boss has more than");
+            ImGui.SameLine();
+            var ratio = c.GroupBossHpRatio;
+            ImGui.SetNextItemWidth(150);
+            if (ImGui.SliderInt("##ratio", ref ratio, 20, 200, "%d× your HP")) { c.GroupBossHpRatio = ratio; changed = true; }
+            Ui.Help("Lower = skips more bosses. Soloable FATE bosses are usually well under 40× a synced player's HP; " +
+                    "the big ones (Behemoth-style notorious monsters) are far above.");
+
+            changed |= Flag("Join anyway when other players are on it", c.JoinGroupBossWithPlayers, v => c.JoinGroupBossWithPlayers = v,
+                            "A group boss is fine to join when a crowd is already fighting it.");
+            if (c.JoinGroupBossWithPlayers)
+            {
+                ImGui.SameLine();
+                var n = c.GroupBossPlayers;
+                ImGui.SetNextItemWidth(100);
+                if (ImGui.InputInt("players##gbp", ref n, 1, 5)) { c.GroupBossPlayers = Math.Clamp(n, 1, 50); changed = true; }
+            }
+
+            ImGui.Dummy(new Vector2(0, 2));
+            if (c.GroupBosses.Count == 0)
+                ImGui.TextColored(Ui.Dim, "No group bosses found yet — they're added as FateRunner meets them.");
+            else
+            {
+                ImGui.TextColored(Ui.Muted, $"Skipped ({c.GroupBosses.Count}) — click one to do it again:");
+                // Chips that wrap onto the next line when the row is full.
+                var rowRight = ImGui.GetCursorScreenPos().X + Ui.AvailX();
+                var first = true;
+                foreach (var name in c.GroupBosses.OrderBy(x => x))
+                {
+                    var label = $"{name}  ×##gb{name}";
+                    if (!first && ImGui.GetItemRectMax().X + 6 + Ui.MiniButtonWidth(label) <= rowRight) ImGui.SameLine(0, 6);
+                    first = false;
+                    if (Ui.MiniButton(label)) forgetBoss = name;
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip($"Stop skipping {name}");
+                }
+            }
+            if (forgetBoss != null) { c.GroupBosses.Remove(forgetBoss); forgetBoss = null; changed = true; }
+        }
+        Ui.EndPanel();
         return changed;
     }
 

@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.0.0.7</Version>
+    <Version>0.0.0.8</Version>
     <Description>Runs FATEs for you: finds them, flies there, level syncs, fights with Wrath Combo, hands in items, follows escorts, and hops zones — until you have the Bicolor Gemstones you want.</Description>
     <PackageProjectUrl>https://github.com/sadoniaveletoria/Faterunner</PackageProjectUrl>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

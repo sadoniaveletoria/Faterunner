@@ -307,7 +307,7 @@ public sealed unsafe class FateEngine : IDisposable
         foreach (var k in blacklist.Where(b => b.Value < DateTime.UtcNow).Select(b => b.Key).ToList()) blacklist.Remove(k);
         var level = Game.JobLevel;
         var all = Fates.All().Where(f => (f.Running || (f.NeedsNpcStart && cfg.StartNpcFates)) && KindAllowed(f.Kind) &&
-                                         !blacklist.ContainsKey(f.Id) && f.Level <= level + 3 &&
+                                         !blacklist.ContainsKey(f.Id) && !KnownGroupBoss(f) && f.Level <= level + 3 &&
                                          (f.Preparing || f.SecondsLeft >= cfg.MinSecondsLeft)).ToList();
         var fresh = all.Where(f => f.Progress < cfg.SkipAboveProgress).ToList();
         if (fresh.Count > 0) all = fresh;
@@ -363,12 +363,13 @@ public sealed unsafe class FateEngine : IDisposable
 
     private bool Eligible(FateInfo f, int level) =>
         (f.Running || (f.NeedsNpcStart && cfg.StartNpcFates)) && KindAllowed(f.Kind) && !blacklist.ContainsKey(f.Id) &&
-        f.Level <= level + 3 && (f.Preparing || f.SecondsLeft >= cfg.MinSecondsLeft);
+        !KnownGroupBoss(f) && f.Level <= level + 3 && (f.Preparing || f.SecondsLeft >= cfg.MinSecondsLeft);
 
     private string SkipReason(FateInfo f, int level)
     {
         if (!KindAllowed(f.Kind)) return $"{KindName(f.Kind)} turned off";
-        if (blacklist.ContainsKey(f.Id)) return "couldn't reach it";
+        if (KnownGroupBoss(f)) return "group boss";
+        if (blacklist.ContainsKey(f.Id)) return groupBossLeft.Contains(f.Id) ? "group boss" : "couldn't reach it";
         if (f.Level > level + 3) return $"Lv{f.Level}, too high";
         if (f.Preparing && !f.NeedsNpcStart) return "not started yet";
         if (f.Preparing && !cfg.StartNpcFates) return "needs an NPC to start";
@@ -404,6 +405,7 @@ public sealed unsafe class FateEngine : IDisposable
         escortNpc = 0;
         handInStage = 0;
         handInMob = handInItem = 0;
+        groupBossChecked = false;
         syncStartedAt = DateTime.MinValue;
         syncWarned = false;
         Enter(RunPhase.Travel, $"Going to {pick.Name}");
@@ -518,6 +520,25 @@ public sealed unsafe class FateEngine : IDisposable
             }
         }
         else { syncStartedAt = DateTime.MinValue; syncWarned = false; }
+
+        // A boss too big to solo: leave (once, when first fighting it — the boss is in view and you're synced).
+        if (f.Kind == FateKind.Boss && cfg.SkipGroupBosses && !groupBossChecked)
+        {
+            if (GroupBossReason(me, f) is { } big)
+            {
+                groupBossChecked = true;
+                cfg.GroupBosses.Add(f.Name);
+                cfg.Save();
+                groupBossLeft.Add(f.Id);
+                Blacklist(f.Id, $"group boss ({big})");
+                StopFighting();
+                Plugin.Chat.Print($"[FateRunner] Skipping {f.Name}: {big} — that needs a group. It'll be skipped from now on (Which FATEs → Group bosses).");
+                Enter(RunPhase.Choosing, "Skipped a group boss — picking another FATE");
+                return;
+            }
+            // Decide once the boss is actually in view (it may not have spawned / loaded yet).
+            if (FateBoss(f.Id) != null) groupBossChecked = true;
+        }
 
         switch (f.Kind)
         {
@@ -792,6 +813,39 @@ public sealed unsafe class FateEngine : IDisposable
     }
 
     // ---------------- Helpers ----------------
+
+    private bool groupBossChecked;
+    private readonly HashSet<ushort> groupBossLeft = new();
+
+    /// <summary>A boss FATE already known to be a group boss — skipped unless enough players are there.</summary>
+    private bool KnownGroupBoss(FateInfo f)
+        => cfg.SkipGroupBosses && f.Kind == FateKind.Boss && cfg.GroupBosses.Contains(f.Name) &&
+           !(cfg.JoinGroupBossWithPlayers && PlayersNear(f) >= cfg.GroupBossPlayers);
+
+    /// <summary>Why this FATE's boss is a group boss, or null if it's soloable (or enough players are on it).</summary>
+    private string? GroupBossReason(IBattleChara me, FateInfo f)
+    {
+        if (FateBoss(f.Id) is not { } boss || me.MaxHp == 0) return null;
+        var ratio = boss.MaxHp / (double)me.MaxHp;
+        if (ratio < cfg.GroupBossHpRatio) return null;
+        var players = PlayersNear(f);
+        if (cfg.JoinGroupBossWithPlayers && players >= cfg.GroupBossPlayers) return null;
+        return $"{boss.Name.TextValue} has {ratio:0}× your HP and {players} other player{(players == 1 ? "" : "s")} are here";
+    }
+
+    /// <summary>The FATE's biggest enemy (by max HP).</summary>
+    private static IBattleChara? FateBoss(ushort fateId)
+        => Plugin.ObjectTable.OfType<IBattleChara>()
+                 .Where(o => o.ObjectKind == ObjectKind.BattleNpc && FateIdOf(o) == fateId && o.MaxHp > 0 && IsEnemy(o))
+                 .OrderByDescending(o => o.MaxHp).FirstOrDefault();
+
+    /// <summary>Other players in or near the FATE's ring.</summary>
+    private static int PlayersNear(FateInfo f)
+    {
+        var me = Plugin.ObjectTable.LocalPlayer;
+        return Plugin.ObjectTable.Count(o => o.ObjectKind == ObjectKind.Player && o.GameObjectId != me?.GameObjectId &&
+                                             Vector3.Distance(o.Position, f.Position) <= f.Radius + 15f);
+    }
 
     private void Blacklist(ushort id, string why)
     {
