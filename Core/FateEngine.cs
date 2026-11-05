@@ -405,7 +405,6 @@ public sealed unsafe class FateEngine : IDisposable
         escortNpc = 0;
         handInStage = 0;
         handInMob = handInItem = 0;
-        lastGroupBossCheck = DateTime.MinValue;
         syncStartedAt = DateTime.MinValue;
         syncWarned = false;
         Enter(RunPhase.Travel, $"Going to {pick.Name}");
@@ -520,15 +519,6 @@ public sealed unsafe class FateEngine : IDisposable
             }
         }
         else { syncStartedAt = DateTime.MinValue; syncWarned = false; }
-
-        // A boss too big to solo: leave. Checked every second for the whole FATE (the boss often appears after its
-        // adds, or part-way through), on any fighting FATE — not only ones marked as boss FATEs.
-        if (cfg.SkipGroupBosses && f.Kind is not (FateKind.HandIn or FateKind.Escort) &&
-            DateTime.UtcNow - lastGroupBossCheck > TimeSpan.FromSeconds(1))
-        {
-            lastGroupBossCheck = DateTime.UtcNow;
-            if (GroupBossReason(me, f) is { } big) { LeaveAsGroupBoss(f, big); return; }
-        }
 
         switch (f.Kind)
         {
@@ -809,8 +799,6 @@ public sealed unsafe class FateEngine : IDisposable
 
     // ---------------- Helpers ----------------
 
-    private DateTime lastGroupBossCheck = DateTime.MinValue;
-    private string lastBossLog = "";
 
     /// <summary>Leave the current FATE as a group boss and remember it by name.</summary>
     private void LeaveAsGroupBoss(FateInfo f, string why)
@@ -842,29 +830,10 @@ public sealed unsafe class FateEngine : IDisposable
     }
     private readonly HashSet<ushort> groupBossLeft = new();
 
-    /// <summary>A boss FATE already known to be a group boss — skipped unless enough players are there.</summary>
+    /// <summary>A world-boss FATE (built-in list or one you marked) — skipped unless enough players are there.</summary>
     private bool KnownGroupBoss(FateInfo f)
         => cfg.SkipGroupBosses && (GroupBossFates.Contains(f.Name) || cfg.GroupBosses.Contains(f.Name)) &&
            !(cfg.JoinGroupBossWithPlayers && PlayersNear(f) >= cfg.GroupBossPlayers);
-
-    /// <summary>Why this FATE's boss is a group boss, or null if it's soloable (or enough players are on it).</summary>
-    private string? GroupBossReason(IBattleChara me, FateInfo f)
-    {
-        if (FateBoss(f.Id) is not { } boss || me.MaxHp == 0) return null;
-        var ratio = boss.MaxHp / (double)me.MaxHp;
-        var line = $"Group boss check {f.Name}: biggest enemy {boss.Name.TextValue} {boss.MaxHp:N0} HP vs your {me.MaxHp:N0} = {ratio:0.#}x (limit {cfg.GroupBossHpRatio}x)";
-        if (line != lastBossLog) { lastBossLog = line; Plugin.Log.Debug(line); }
-        if (ratio < cfg.GroupBossHpRatio) return null;
-        var players = PlayersNear(f);
-        if (cfg.JoinGroupBossWithPlayers && players >= cfg.GroupBossPlayers) return null;
-        return $"{boss.Name.TextValue} has {ratio:0}× your HP and {players} other player{(players == 1 ? "" : "s")} are here";
-    }
-
-    /// <summary>The FATE's biggest enemy (by max HP).</summary>
-    private static IBattleChara? FateBoss(ushort fateId)
-        => Plugin.ObjectTable.OfType<IBattleChara>()
-                 .Where(o => o.ObjectKind == ObjectKind.BattleNpc && FateIdOf(o) == fateId && o.MaxHp > 0 && IsEnemy(o))
-                 .OrderByDescending(o => o.MaxHp).FirstOrDefault();
 
     /// <summary>Other players in or near the FATE's ring.</summary>
     private static int PlayersNear(FateInfo f)

@@ -416,19 +416,10 @@ public sealed class MainWindow : Window
         Ui.BeginPanel();
         Ui.CardTitle("Group bosses");
         changed |= Flag("Skip bosses that need a group", c.SkipGroupBosses, v => c.SkipGroupBosses = v,
-                        "Big notorious monsters you can't solo. Once synced in the ring, a boss with far more HP than you counts as one: " +
-                        "FateRunner leaves, and remembers it so it never flies there again.");
+                        "World-boss FATEs you can't solo: each expansion's special FATEs, plus any you mark with \"Too big — never again\". " +
+                        "They're skipped by name, without flying there.");
         if (c.SkipGroupBosses)
         {
-            ImGui.AlignTextToFramePadding();
-            ImGui.TextColored(Ui.Muted, "A group boss has more than");
-            ImGui.SameLine();
-            var ratio = c.GroupBossHpRatio;
-            ImGui.SetNextItemWidth(150);
-            if (ImGui.SliderInt("##ratio", ref ratio, 20, 200, "%d× your HP")) { c.GroupBossHpRatio = ratio; changed = true; }
-            Ui.Help("Lower = skips more bosses. Soloable FATE bosses are usually well under 40× a synced player's HP; " +
-                    "the big ones (Behemoth-style notorious monsters) are far above.");
-
             changed |= Flag("Join anyway when other players are on it", c.JoinGroupBossWithPlayers, v => c.JoinGroupBossWithPlayers = v,
                             "A group boss is fine to join when a crowd is already fighting it.");
             if (c.JoinGroupBossWithPlayers)
@@ -444,10 +435,10 @@ public sealed class MainWindow : Window
             Ui.Help("Each expansion's special FATEs, plus A Realm Reborn's big notorious monsters:\n" +
                     string.Join("\n", GroupBossFates.Known.Select(k => $"{k.Expansion}: {k.Name} ({k.Boss})")));
             if (c.GroupBosses.Count == 0)
-                ImGui.TextColored(Ui.Dim, "Others too big to solo are added here as FateRunner meets them (or you press \"Too big\").");
+                ImGui.TextColored(Ui.Dim, "Any other boss you can't solo: press \"Too big — never again\" while in it, and it's listed here.");
             else
             {
-                ImGui.TextColored(Ui.Muted, $"Skipped ({c.GroupBosses.Count}) — click one to do it again:");
+                ImGui.TextColored(Ui.Muted, $"You marked ({c.GroupBosses.Count}) — click one to do it again:");
                 // Chips that wrap onto the next line when the row is full.
                 var rowRight = ImGui.GetCursorScreenPos().X + Ui.AvailX();
                 var first = true;
