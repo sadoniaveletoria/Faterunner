@@ -844,7 +844,7 @@ public sealed unsafe class FateEngine : IDisposable
 
     /// <summary>A boss FATE already known to be a group boss — skipped unless enough players are there.</summary>
     private bool KnownGroupBoss(FateInfo f)
-        => cfg.SkipGroupBosses && cfg.GroupBosses.Contains(f.Name) &&
+        => cfg.SkipGroupBosses && (GroupBossFates.Contains(f.Name) || cfg.GroupBosses.Contains(f.Name)) &&
            !(cfg.JoinGroupBossWithPlayers && PlayersNear(f) >= cfg.GroupBossPlayers);
 
     /// <summary>Why this FATE's boss is a group boss, or null if it's soloable (or enough players are on it).</summary>

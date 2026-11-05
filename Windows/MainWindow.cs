@@ -440,8 +440,11 @@ public sealed class MainWindow : Window
             }
 
             ImGui.Dummy(new Vector2(0, 2));
+            ImGui.TextColored(Ui.Muted, $"Always skipped: the {GroupBossFates.Known.Length} world-boss FATEs");
+            Ui.Help("Each expansion's special FATEs, plus A Realm Reborn's big notorious monsters:\n" +
+                    string.Join("\n", GroupBossFates.Known.Select(k => $"{k.Expansion}: {k.Name} ({k.Boss})")));
             if (c.GroupBosses.Count == 0)
-                ImGui.TextColored(Ui.Dim, "No group bosses found yet — they're added as FateRunner meets them.");
+                ImGui.TextColored(Ui.Dim, "Others too big to solo are added here as FateRunner meets them (or you press \"Too big\").");
             else
             {
                 ImGui.TextColored(Ui.Muted, $"Skipped ({c.GroupBosses.Count}) — click one to do it again:");
