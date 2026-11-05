@@ -125,7 +125,14 @@ public sealed class MainWindow : Window
         ImGui.PopTextWrapPos();
         ImGui.Dummy(new Vector2(0, 1));
         if (e.Running && e.Current is { } f)
+        {
             Ui.FateCard(f, Fates.SyncedTo(f.Id), right, false);
+            if (Ui.MiniButton("Skip this FATE##skip")) e.SkipCurrentFate(false);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Leave it and pick another FATE (it can come back later).");
+            ImGui.SameLine(0, 6);
+            if (Ui.MiniButton("Too big — never again##skipgb")) e.SkipCurrentFate(true);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Leave it and add it to the group bosses, so it's always skipped (Which FATEs → Group bosses).");
+        }
         else
         {
             var zone = (uint)Plugin.ClientState.TerritoryType;

@@ -56,7 +56,15 @@ public sealed class OverlayWindow : Window
         Ui.PhasePill(phase, color);
         ImGui.SameLine();
         var stopW = Ui.MiniButtonWidth("Stop");
-        ImGui.SetCursorPosX(Math.Max(ImGui.GetCursorPosX(), start + w - stopW));
+        var skipW = e.Current != null ? Ui.MiniButtonWidth("Skip") + 6 : 0;
+        ImGui.SetCursorPosX(Math.Max(ImGui.GetCursorPosX(), start + w - stopW - skipW));
+        if (e.Current != null)
+        {
+            if (Ui.MiniButton("Skip##ovskip")) e.SkipCurrentFate(false);
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Leave this FATE and pick another.\nRight-click: too big — never do it again.");
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Right)) e.SkipCurrentFate(true);
+            ImGui.SameLine(0, 6);
+        }
         ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.95f, 0.36f, 0.36f, 0.18f));
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.95f, 0.36f, 0.36f, 0.35f));
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.7f, 0.7f, 1f));

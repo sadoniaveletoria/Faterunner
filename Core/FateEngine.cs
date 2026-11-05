@@ -405,7 +405,7 @@ public sealed unsafe class FateEngine : IDisposable
         escortNpc = 0;
         handInStage = 0;
         handInMob = handInItem = 0;
-        groupBossChecked = false;
+        lastGroupBossCheck = DateTime.MinValue;
         syncStartedAt = DateTime.MinValue;
         syncWarned = false;
         Enter(RunPhase.Travel, $"Going to {pick.Name}");
@@ -521,23 +521,13 @@ public sealed unsafe class FateEngine : IDisposable
         }
         else { syncStartedAt = DateTime.MinValue; syncWarned = false; }
 
-        // A boss too big to solo: leave (once, when first fighting it — the boss is in view and you're synced).
-        if (f.Kind == FateKind.Boss && cfg.SkipGroupBosses && !groupBossChecked)
+        // A boss too big to solo: leave. Checked every second for the whole FATE (the boss often appears after its
+        // adds, or part-way through), on any fighting FATE — not only ones marked as boss FATEs.
+        if (cfg.SkipGroupBosses && f.Kind is not (FateKind.HandIn or FateKind.Escort) &&
+            DateTime.UtcNow - lastGroupBossCheck > TimeSpan.FromSeconds(1))
         {
-            if (GroupBossReason(me, f) is { } big)
-            {
-                groupBossChecked = true;
-                cfg.GroupBosses.Add(f.Name);
-                cfg.Save();
-                groupBossLeft.Add(f.Id);
-                Blacklist(f.Id, $"group boss ({big})");
-                StopFighting();
-                Plugin.Chat.Print($"[FateRunner] Skipping {f.Name}: {big} — that needs a group. It'll be skipped from now on (Which FATEs → Group bosses).");
-                Enter(RunPhase.Choosing, "Skipped a group boss — picking another FATE");
-                return;
-            }
-            // Decide once the boss is actually in view (it may not have spawned / loaded yet).
-            if (FateBoss(f.Id) != null) groupBossChecked = true;
+            lastGroupBossCheck = DateTime.UtcNow;
+            if (GroupBossReason(me, f) is { } big) { LeaveAsGroupBoss(f, big); return; }
         }
 
         switch (f.Kind)
@@ -819,12 +809,42 @@ public sealed unsafe class FateEngine : IDisposable
 
     // ---------------- Helpers ----------------
 
-    private bool groupBossChecked;
+    private DateTime lastGroupBossCheck = DateTime.MinValue;
+    private string lastBossLog = "";
+
+    /// <summary>Leave the current FATE as a group boss and remember it by name.</summary>
+    private void LeaveAsGroupBoss(FateInfo f, string why)
+    {
+        cfg.GroupBosses.Add(f.Name);
+        cfg.Save();
+        groupBossLeft.Add(f.Id);
+        Blacklist(f.Id, $"group boss ({why})");
+        StopFighting();
+        mover.Stop();
+        Plugin.Targets.Target = null;
+        Plugin.Chat.Print($"[FateRunner] Skipping {f.Name}: {why}. It'll be skipped from now on (Which FATEs → Group bosses).");
+        Enter(RunPhase.Choosing, "Skipped a group boss — picking another FATE");
+    }
+
+    /// <summary>The Skip button: leave the FATE being done now, and (if asked) never do it again.</summary>
+    public void SkipCurrentFate(bool remember)
+    {
+        if (!Running || Current is not { } f) return;
+        if (remember) LeaveAsGroupBoss(f, "you skipped it");
+        else
+        {
+            Blacklist(f.Id, "you skipped it");
+            StopFighting();
+            mover.Stop();
+            Plugin.Targets.Target = null;
+            Enter(RunPhase.Choosing, $"Skipped {f.Name} — picking another FATE");
+        }
+    }
     private readonly HashSet<ushort> groupBossLeft = new();
 
     /// <summary>A boss FATE already known to be a group boss — skipped unless enough players are there.</summary>
     private bool KnownGroupBoss(FateInfo f)
-        => cfg.SkipGroupBosses && f.Kind == FateKind.Boss && cfg.GroupBosses.Contains(f.Name) &&
+        => cfg.SkipGroupBosses && cfg.GroupBosses.Contains(f.Name) &&
            !(cfg.JoinGroupBossWithPlayers && PlayersNear(f) >= cfg.GroupBossPlayers);
 
     /// <summary>Why this FATE's boss is a group boss, or null if it's soloable (or enough players are on it).</summary>
@@ -832,6 +852,8 @@ public sealed unsafe class FateEngine : IDisposable
     {
         if (FateBoss(f.Id) is not { } boss || me.MaxHp == 0) return null;
         var ratio = boss.MaxHp / (double)me.MaxHp;
+        var line = $"Group boss check {f.Name}: biggest enemy {boss.Name.TextValue} {boss.MaxHp:N0} HP vs your {me.MaxHp:N0} = {ratio:0.#}x (limit {cfg.GroupBossHpRatio}x)";
+        if (line != lastBossLog) { lastBossLog = line; Plugin.Log.Debug(line); }
         if (ratio < cfg.GroupBossHpRatio) return null;
         var players = PlayersNear(f);
         if (cfg.JoinGroupBossWithPlayers && players >= cfg.GroupBossPlayers) return null;
