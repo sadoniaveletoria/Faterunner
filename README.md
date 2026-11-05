@@ -53,10 +53,11 @@ back.
   (read from the game's own FATE list; any expansion, only zones you've attuned to), and moves up as you level, until
   the level you set. The zone tiles show which zones it will use.
 
-**Group bosses** (Which FATEs → Group bosses, on by default): each expansion's world-boss "special FATEs" (Odin,
-Behemoth, Formidable, Chi, Sally the Sweeper…) are skipped by name without flying there. Press **Too big — never again**
-on the current FATE (or right-click **Skip** on the overlay) to add any other boss; click a name in that list to do it
-again. Optionally it joins anyway when enough other players (default 8) are already there.
+**Group bosses** (Which FATEs → Group bosses, on by default): each expansion's world bosses (Odin, Behemoth,
+Formidable, Chi…) and other known big ones are skipped by name without flying there. Any other boss with far more HP
+than you (40× your synced HP) is left as soon as it appears and remembered. Press **Too big — never again** on the
+current FATE (or right-click **Skip** on the overlay) to add one yourself; click a name in that list to do it again.
+Optionally it joins anyway when enough other players (default 8) are already there.
 
 **Level sync** is always on: inside the ring it syncs before attacking, retrying until the game confirms (an
 over-level, un-synced player gets nothing from a FATE).

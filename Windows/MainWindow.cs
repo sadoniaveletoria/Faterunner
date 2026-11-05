@@ -416,8 +416,8 @@ public sealed class MainWindow : Window
         Ui.BeginPanel();
         Ui.CardTitle("Group bosses");
         changed |= Flag("Skip bosses that need a group", c.SkipGroupBosses, v => c.SkipGroupBosses = v,
-                        "World-boss FATEs you can't solo: each expansion's special FATEs, plus any you mark with \"Too big — never again\". " +
-                        "They're skipped by name, without flying there.");
+                        "World-boss FATEs you can't solo: each expansion's world bosses, any other boss FateRunner finds far too big once " +
+                        "it's synced in the ring, and any you mark with \"Too big — never again\". They're skipped by name, without flying there.");
         if (c.SkipGroupBosses)
         {
             changed |= Flag("Join anyway when other players are on it", c.JoinGroupBossWithPlayers, v => c.JoinGroupBossWithPlayers = v,
@@ -431,14 +431,14 @@ public sealed class MainWindow : Window
             }
 
             ImGui.Dummy(new Vector2(0, 2));
-            ImGui.TextColored(Ui.Muted, $"Always skipped: the {GroupBossFates.Known.Length} world-boss FATEs");
-            Ui.Help("Each expansion's special FATEs, plus A Realm Reborn's big notorious monsters:\n" +
+            ImGui.TextColored(Ui.Muted, $"Always skipped: {GroupBossFates.Known.Length} world-boss FATEs");
+            Ui.Help("Each expansion's world bosses, plus other big notorious monsters:\n" +
                     string.Join("\n", GroupBossFates.Known.Select(k => $"{k.Expansion}: {k.Name} ({k.Boss})")));
             if (c.GroupBosses.Count == 0)
-                ImGui.TextColored(Ui.Dim, "Any other boss you can't solo: press \"Too big — never again\" while in it, and it's listed here.");
+                ImGui.TextColored(Ui.Dim, "Other bosses too big to solo are added here when FateRunner meets them, or when you press \"Too big — never again\".");
             else
             {
-                ImGui.TextColored(Ui.Muted, $"You marked ({c.GroupBosses.Count}) — click one to do it again:");
+                ImGui.TextColored(Ui.Muted, $"Also skipped ({c.GroupBosses.Count}) — click one to do it again:");
                 // Chips that wrap onto the next line when the row is full.
                 var rowRight = ImGui.GetCursorScreenPos().X + Ui.AvailX();
                 var first = true;
