@@ -403,6 +403,7 @@ public sealed unsafe class FateEngine : IDisposable
         npcTries = 0;
         escortNpc = 0;
         handInStage = 0;
+        handInMob = handInItem = 0;
         syncStartedAt = DateTime.MinValue;
         syncWarned = false;
         Enter(RunPhase.Travel, $"Going to {pick.Name}");
@@ -576,17 +577,82 @@ public sealed unsafe class FateEngine : IDisposable
             TickTurnIn(me, f, have);
             return;
         }
-        // Items lying on the ground for this FATE: pick them up.
-        if (!inCombat && FatePickup(me, f.Id) is { } item)
+        // Stick with what was started — finish the mob being fought, or the item being fetched — instead of choosing
+        // again every tick (which flipped between pulling a mob and walking to an item, finishing neither).
+        var now = DateTime.UtcNow;
+
+        // 1) Fighting a mob: until it's dead or gone (a minute at most).
+        if (handInMob != 0)
         {
-            StopFighting();
-            if (mover.Step(item.Position, 2.5f, true, 999f) && DateTime.UtcNow - lastInteract > TimeSpan.FromSeconds(2)) Interact(item);
-            Status = $"{f.Name} {f.Progress}% — picking up ({have} held)";
+            var mob = ByObjectId(handInMob) as IBattleChara;
+            if (mob != null && !mob.IsDead && mob.CurrentHp > 0 && mob.IsTargetable && now - handInSince < TimeSpan.FromSeconds(60))
+            {
+                Engage(me, mob);
+                Status = $"{f.Name} {f.Progress}% — fighting {mob.Name.TextValue} ({have} held)";
+                return;
+            }
+            handInMob = 0;
+        }
+
+        // 2) Fetching an item: until it's picked up (it disappears) or it's clearly not working.
+        if (handInItem != 0)
+        {
+            var item = ByObjectId(handInItem);
+            var attacked = AttackerOf(me, f.Id);
+            if (item == null || !item.IsTargetable) handInItem = 0; // picked up (or someone else got it)
+            else if (attacked != null) { handInItem = 0; StartHandInFight(attacked); return; } // deal with it first
+            else if (now - handInSince > TimeSpan.FromSeconds(15) || handInTries >= 5)
+            {
+                skippedItems[handInItem] = now.AddMinutes(1); // can't reach / pick it up — leave it for a minute
+                handInItem = 0;
+            }
+            else
+            {
+                StopFighting();
+                if (mover.Step(item.Position, 2.5f, true, 999f) && !nav.IsBusy && now - lastInteract > TimeSpan.FromSeconds(1.5))
+                {
+                    Interact(item);
+                    handInTries++;
+                }
+                Status = $"{f.Name} {f.Progress}% — picking up ({have} held)";
+                return;
+            }
+        }
+
+        // 3) Choose the next thing: whatever is attacking you, else an item on the ground, else a FATE mob.
+        if (AttackerOf(me, f.Id) is { } attacker) { StartHandInFight(attacker); return; }
+        foreach (var k in skippedItems.Where(kv => kv.Value < now).Select(kv => kv.Key).ToList()) skippedItems.Remove(k);
+        if (FatePickup(me, f.Id) is { } next)
+        {
+            handInItem = next.GameObjectId;
+            handInSince = now;
+            handInTries = 0;
+            Status = $"{f.Name} {f.Progress}% — going for an item ({have} held)";
             return;
         }
-        if (!TickFight(me, f, f.Position, f.Radius + 8f)) Status = $"{f.Name} {f.Progress}% — {have} held, waiting for enemies";
-        else Status += $" ({have} held)";
+        if (PickEnemy(me, f.Id, f.Position, f.Radius + 8f) is { } target) { StartHandInFight(target); return; }
+        TickFight(me, f, f.Position, f.Radius + 8f); // nothing to do: wait near the middle
+        Status = $"{f.Name} {f.Progress}% — {have} held, waiting for enemies";
     }
+
+    private ulong handInMob, handInItem;
+    private DateTime handInSince;
+    private int handInTries;
+    private readonly Dictionary<ulong, DateTime> skippedItems = new();
+
+    private void StartHandInFight(IBattleChara mob)
+    {
+        handInMob = mob.GameObjectId;
+        handInSince = DateTime.UtcNow;
+    }
+
+    /// <summary>A FATE enemy (or anything hostile) that's attacking you right now.</summary>
+    private static IBattleChara? AttackerOf(IBattleChara me, ushort fateId)
+        => Plugin.ObjectTable.OfType<IBattleChara>()
+                 .Where(o => o.ObjectKind == ObjectKind.BattleNpc && o.IsTargetable && !o.IsDead && o.CurrentHp > 0 &&
+                             o.TargetObjectId == me.GameObjectId && IsEnemy(o))
+                 .OrderByDescending(o => FateIdOf(o) == fateId)
+                 .ThenBy(o => Vector3.Distance(o.Position, me.Position)).FirstOrDefault();
 
     private void TickTurnIn(IBattleChara me, FateInfo f, int have)
     {
@@ -695,6 +761,7 @@ public sealed unsafe class FateEngine : IDisposable
 
     private IGameObject? FatePickup(IBattleChara me, ushort fateId)
         => Plugin.ObjectTable.Where(o => o.ObjectKind == ObjectKind.EventObj && o.IsTargetable && FateIdOf(o) == fateId &&
+                                         !skippedItems.ContainsKey(o.GameObjectId) &&
                                          Vector3.Distance(o.Position, me.Position) < 40f)
                              .OrderBy(o => Vector3.Distance(o.Position, me.Position)).FirstOrDefault();
 
@@ -734,6 +801,9 @@ public sealed unsafe class FateEngine : IDisposable
 
     private static IGameObject? Find(uint entityId)
         => entityId == 0 || entityId == 0xE0000000 ? null : FindById(entityId);
+
+    private static IGameObject? ByObjectId(ulong id)
+        => id == 0 ? null : Plugin.ObjectTable.FirstOrDefault(o => o.GameObjectId == id);
 
     private static IGameObject? FindById(uint entityId)
         => Plugin.ObjectTable.FirstOrDefault(o => o.EntityId == entityId && o.IsTargetable);
