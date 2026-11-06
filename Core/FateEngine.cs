@@ -73,6 +73,7 @@ public sealed unsafe class FateEngine : IDisposable
     {
         Plugin.Framework.Update -= OnUpdate;
         if (Running) Stop("Unloaded");
+        else if (nav.IsBusy) nav.Stop(); // a route from the run that just ended
     }
 
     // ---------------- Start / stop ----------------
@@ -144,7 +145,13 @@ public sealed unsafe class FateEngine : IDisposable
 
     private void Finish(RunPhase end, string text)
     {
+        // Leave nothing steering you: no route (including one still being worked out), no target for BossMod's AI
+        // to walk to, no rotation. Checked again for a few seconds after, in case a route lands late.
         mover.Stop();
+        Plugin.Targets.Target = null;
+        cleanupUntil = DateTime.UtcNow.AddSeconds(4);
+        handInMob = handInItem = 0;
+        handInStage = 0;
         if (cfg.UseWrath) { wrath.SetAutoRotation(false); wrath.Release(); }
         bossMod.Off();
         fighting = false;
@@ -168,9 +175,17 @@ public sealed unsafe class FateEngine : IDisposable
 
     // ---------------- Tick ----------------
 
+    private DateTime cleanupUntil = DateTime.MinValue;
+
     private void OnUpdate(IFramework _)
     {
-        if (!Running || DateTime.UtcNow < nextTick) return;
+        if (!Running)
+        {
+            // Just stopped: if a route that was still being worked out starts moving you now, stop it.
+            if (DateTime.UtcNow < cleanupUntil && nav.IsBusy) nav.Stop();
+            return;
+        }
+        if (DateTime.UtcNow < nextTick) return;
         nextTick = DateTime.UtcNow.AddMilliseconds(150);
         try { Tick(); }
         catch (Exception ex)
@@ -405,6 +420,8 @@ public sealed unsafe class FateEngine : IDisposable
         escortNpc = 0;
         handInStage = 0;
         handInMob = handInItem = 0;
+        idleSince = DateTime.MinValue;
+        lastHandInLog = "";
         lastGroupBossCheck = DateTime.MinValue;
         syncStartedAt = DateTime.MinValue;
         syncWarned = false;
@@ -581,10 +598,16 @@ public sealed unsafe class FateEngine : IDisposable
         var have = Game.ItemCount(f.EventItem);
         var inCombat = Plugin.Condition[ConditionFlag.InCombat];
         var enemies = PickEnemy(me, f.Id, f.Position, f.Radius + 8f) != null;
-        // Hand in a batch, or whatever you hold when it's nearly over / there's nothing left to kill.
-        var turnIn = have > 0 && (have >= 10 || f.SecondsLeft < 60 || (!enemies && FatePickup(me, f.Id) == null)) && !inCombat;
+        var nothingToDo = !inCombat && !enemies && FatePickup(me, f.Id) == null;
+        if (!nothingToDo) idleSince = DateTime.MinValue;
+        else if (idleSince == DateTime.MinValue) idleSince = DateTime.UtcNow;
+        // Hand in a batch of 10, or what you hold when it's nearly over, or when there's been nothing to kill or pick
+        // up for a while (not the moment the last mob dies — the next ones are usually about to spawn).
+        var idleLong = idleSince != DateTime.MinValue && DateTime.UtcNow - idleSince > TimeSpan.FromSeconds(20);
+        var turnIn = have > 0 && !inCombat && (have >= 10 || f.SecondsLeft < 60 || idleLong);
         if (turnIn || handInStage > 0)
         {
+            if (handInStage == 0) HandInLog($"turning in {have} ({(have >= 10 ? "batch" : f.SecondsLeft < 60 ? "time short" : "nothing else to do")})");
             TickTurnIn(me, f, have);
             return;
         }
@@ -598,6 +621,7 @@ public sealed unsafe class FateEngine : IDisposable
             var mob = ByObjectId(handInMob) as IBattleChara;
             if (mob != null && !mob.IsDead && mob.CurrentHp > 0 && mob.IsTargetable && now - handInSince < TimeSpan.FromSeconds(60))
             {
+                HandInLog($"fighting {mob.Name.TextValue}");
                 Engage(me, mob);
                 Status = $"{f.Name} {f.Progress}% — fighting {mob.Name.TextValue} ({have} held)";
                 return;
@@ -619,12 +643,14 @@ public sealed unsafe class FateEngine : IDisposable
             else if (now - handInSince > TimeSpan.FromSeconds(10) || handInTries >= 3)
             {
                 // Not picking up (out of reach, or a FATE object that only looks like a pickup): leave it a while.
+                HandInLog($"giving up on item {item.Name.TextValue} after {handInTries} tries");
                 skippedItems[handInItem] = now.AddMinutes(5);
                 handInItem = 0;
             }
             else
             {
                 StopFighting();
+                HandInLog($"picking up {item.Name.TextValue}");
                 if (mover.Step(item.Position, 2.5f, true, 999f) && !nav.IsBusy && now - lastInteract > TimeSpan.FromSeconds(1.5))
                 {
                     Interact(item);
@@ -652,6 +678,16 @@ public sealed unsafe class FateEngine : IDisposable
     }
 
     private ulong handInMob, handInItem;
+    private DateTime idleSince = DateTime.MinValue;
+    private string lastHandInLog = "";
+
+    /// <summary>Logs each change of plan in a hand-in FATE (once per change), to see why it does what it does.</summary>
+    private void HandInLog(string what)
+    {
+        if (what == lastHandInLog) return;
+        lastHandInLog = what;
+        Plugin.Log.Debug($"Hand-in: {what}");
+    }
     private DateTime handInSince;
     private int handInTries;
     private readonly Dictionary<ulong, DateTime> skippedItems = new();

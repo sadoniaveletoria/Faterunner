@@ -17,6 +17,7 @@ public sealed class VNavmeshIpc : IpcBase
     private readonly ICallGateSubscriber<bool, object> setMovementAllowed;
     private readonly ICallGateSubscriber<Vector3, bool, float, bool> moveCloseTo;
     private readonly ICallGateSubscriber<object> stop;
+    private readonly ICallGateSubscriber<object> cancelPathfinds;
     private readonly ICallGateSubscriber<bool> isRunning;
     private readonly ICallGateSubscriber<bool> pathfindInProgress;
     private readonly ICallGateSubscriber<Vector3, bool, float, Vector3?> pointOnFloor;
@@ -34,6 +35,7 @@ public sealed class VNavmeshIpc : IpcBase
         setMovementAllowed = pi.GetIpcSubscriber<bool, object>("vnavmesh.Path.SetMovementAllowed");
         moveCloseTo = pi.GetIpcSubscriber<Vector3, bool, float, bool>("vnavmesh.SimpleMove.PathfindAndMoveCloseTo");
         stop = pi.GetIpcSubscriber<object>("vnavmesh.Path.Stop");
+        cancelPathfinds = pi.GetIpcSubscriber<object>("vnavmesh.Nav.PathfindCancelAll");
         isRunning = pi.GetIpcSubscriber<bool>("vnavmesh.Path.IsRunning");
         pathfindInProgress = pi.GetIpcSubscriber<bool>("vnavmesh.SimpleMove.PathfindInProgress");
         pointOnFloor = pi.GetIpcSubscriber<Vector3, bool, float, Vector3?>("vnavmesh.Query.Mesh.PointOnFloor");
@@ -57,7 +59,15 @@ public sealed class VNavmeshIpc : IpcBase
     public bool MoveCloseTo(Vector3 dest, float range, bool fly = false)
         => Safe(() => moveCloseTo.InvokeFunc(dest, fly, range), false, "PathfindAndMoveCloseTo");
 
-    public void Stop() => Safe(() => stop.InvokeAction(), "Stop");
+    /// <summary>
+    /// Stops moving AND throws away any route still being worked out — otherwise a pathfind that finishes after the
+    /// stop starts walking you there anyway.
+    /// </summary>
+    public void Stop()
+    {
+        Safe(() => cancelPathfinds.InvokeAction(), "PathfindCancelAll");
+        Safe(() => stop.InvokeAction(), "Stop");
+    }
 
     /// <summary>
     /// Other plugins can change vnavmesh's path tolerance / movement switch and leave them changed until restart.
